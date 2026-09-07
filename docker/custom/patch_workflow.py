@@ -17,7 +17,7 @@ from models.workflow import Workflow
 APP_ID = "27f263c1-5577-4718-9559-fafda54d3bc0"
 START_ID = "1776072202913"
 DS_OA = "eb6da1b9-1109-4b84-beb0-68c38e20ead3"
-DS_CUSTOMER = "3124f62f-5f7c-44f2-8656-3e306845a58e"
+DS_PROJECT = "3124f62f-5f7c-44f2-8656-3e306845a58e"
 DS_POLICY = "60060625-6909-4d73-9e25-571106a5b113"
 
 PROVIDER = "langgenius/siliconflow/siliconflow"
@@ -28,39 +28,37 @@ QUERY_API_TOKEN = os.environ.get("QUERY_API_TOKEN", "CHANGE_ME_QUERY_TOKEN")
 MSG_OA_MISS = (
     "未在现行 OA 流程与规章制度中检索到与该问题直接对应的条款，"
     "助手不能口头补全审批人、时限或金额。\n"
-    "请登录星澜 OA 提交对应流程，或联系归口部门（人力资源 / 行政 / 财务 / 法务）。"
+    "请登录南极 OA 办理，或联系人力资源 / 行政 / 财务 / 法务。"
 )
-MSG_CUSTOMER_MISS = (
-    "客户主数据中未检索到该问题对应的档案字段，助手不能编造接口人、账期或合同条款。\n"
-    "请向销售中心提交档案补录后再查询；对外承诺以书面合同与主数据为准。"
+MSG_PROJECT_MISS = (
+    "工程项目档案未收录该工程名称或字段，不能编造负责人或上线日期。\n"
+    "请向信息化 / PMO 补录后再查。"
 )
 MSG_SQL_FAIL = (
     "经营取数未成功返回（网关不可用或执行失败）。请稍后重试；"
     "持续失败请联系数据管理员。在结果确认前，请勿用猜测数字做经营决策。"
 )
 MSG_OOS = (
-    "该问题不在业务助手职责范围。当前仅支持："
-    "① OA 与规章制度；② 客户档案；③ 类目日销只读取数（含汇总、导出、直方图）。\n"
-    "请改问上述三类，或联系对应业务部门。"
+    "超出南极业务助手范围。仅支持：OA与制度、内部工程项目、类目日销只读取数。"
 )
 
-INTENT_INSTRUCTION = """你是星澜智造「业务助手」的意图分类器。只输出类别，不要解答，不要解释。
-结合最近几轮对话理解指代（例如「那家客户」「还要谁批」「导出刚才那个」）。
+INTENT_INSTRUCTION = """你是南极人「南极业务助手」意图分类器。只输出类别。
+结合最近几轮理解指代（「那个工程」「还要谁批」「导出刚才那个」）。
 
 分类规则（互斥，按优先级）：
 1. sql：要从业务库 nanjiren_cate_date 取支付金额、渠道、类目、店铺、实控人/负责人、按日/月/年汇总、导出 Excel、直方图。问的是报表数字，不是档案里写死的回款风险描述。
-2. customer：某家已建档客户的接口人、分级、合同、账期、SLA、决策链、驻场、能否提供源代码等档案事实。
+2. project：内部工程名称/编号（日销仓、NJ-DATA-01、渠道中台、OA审批二期、仓储WMS、内衣供应链）、负责人、状态、里程碑。不是支付金额汇总。
 3. oa：公司内部流程与制度。请假考勤、差旅、报销付款、采购、合同用印、入职离职、IT 账号、加班、会议室、立项、固定资产、员工手册、信息安全、反贿赂、财务纪律、招聘培训。
 4. chitchat：打招呼、你是谁、谢谢、能力范围介绍。
 5. oos：与以上四类都无关，或要求改库、绕过审批、猜测未建档信息、闲聊八卦、外部通用知识（天气、写代码、股票推荐等）。
 
 边界（必须遵守）：
-- 「某客户回款风险 / 账期 / 逾期」→ customer；「今年各渠道回款或支付金额汇总」→ sql。
-- 一句里既有制度又有取数：按用户主诉求分；无法判断时优先 oa，并视为本轮只答流程。
-- 拿不准档案还是报表时：有客户全称/简称且问人/合同/SLA → customer；有渠道/类目/时间范围/金额 → sql。
+- 「某工程负责人/状态」→ project；「今年各渠道支付金额」→ sql。
+- 立项审批怎么走 → oa；NJ-OA-03 工程状态 → project。
+- 流程+取数同时出现：有金额/渠道/类目 → sql，否则 oa。
 """
 
-PROMPT_OA = """你是星澜智造内部「业务助手」，职责是按现行制度与 OA 流程答复员工，不替代审批。
+PROMPT_OA = """你是南极业务助手，按现行制度与 OA 答复，不替代审批。
 
 工作标准：
 1. 只依据下方检索片段作答，禁止用常识补全审批人、金额、时限、附件清单。
@@ -71,18 +69,18 @@ PROMPT_OA = """你是星澜智造内部「业务助手」，职责是按现行�
 {{#context#}}
 """
 
-PROMPT_CUSTOMER = """你是星澜智造内部「业务助手」，职责是按客户主数据与档案答复内部同事。密级按内部资料处理，不对外转发敏感字段的汇编。
+PROMPT_PROJECT = """你是南极业务助手，按内部工程项目档案答复。
 
 工作标准：
-1. 只依据下方检索片段作答，禁止编造接口人、合同金额、账期、回款数字、SLA。
+1. 只依据下方检索片段作答，禁止编造负责人、状态、上线日期。
 2. 回复结构固定为：结论 / 依据（档案文档名）/ 风险或待办 / 下一步（谁补录、谁确认）。
-3. 档案未收录的字段必须写「主数据未收录」，请销售中心补录，不得猜测。
+3. 档案未收录的字段必须写「档案未收录」，请信息化 / PMO 补录，不得猜测。
 4. 简体中文，条目清晰。不要输出思考过程。不要使用 markdown 标题。
 
 {{#context#}}
 """
 
-PROMPT_SQL_PLAN = """你是星澜智造经营取数的 SQL 生成器。业务日按 2026-09-07 理解。
+PROMPT_SQL_PLAN = """你是南极人类目日销 SQL 生成器。业务日 2026-09-07。
 只输出一条 MySQL SELECT，不要 JSON，不要 markdown，不要解释，不要思考过程。
 只能查表 nanjiren_cate_date。禁止 INSERT/UPDATE/DELETE/DROP/UNION/JOIN/多语句/注释/其他表。
 
@@ -98,19 +96,19 @@ PROMPT_SQL_PLAN = """你是星澜智造经营取数的 SQL 生成器。业务日
 - 不要输出图表代码，图表由取数网关生成
 """
 
-PROMPT_CHAT = """你是星澜智造内部「业务助手」。用一两句说明能力范围：OA 与制度、客户档案、类目日销只读取数（可汇总、导出 Excel、直方图）。
+PROMPT_CHAT = """你是南极业务助手。一两句说明：可查 OA/制度、内部工程项目、类目日销只读取数。
 不要编造数字或条款。不要输出思考过程。用户若提出职责外问题，引导改问上述三类。
 """
 
 FEATURES = {
     "opening_statement": (
-        "你好，我是星澜智造业务助手。可查询 OA 与规章制度、客户档案，"
+        "你好，我是南极业务助手。可查 OA 与制度、内部工程项目，"
         "以及类目日销只读取数（汇总、导出 Excel、直方图）。"
         "制度与档案以知识库为准，数字以取数网关回传为准；未检索到的内容不会口头补全。"
     ),
     "suggested_questions": [
         "请假超过 3 天要谁审批？",
-        "宁泊汽车的客户成功经理是谁？",
+        "日销仓项目的负责人是谁？",
         "2025年抖音渠道内衣支付金额多少？",
         "按渠道汇总今年支付金额并导出Excel",
         "按渠道汇总今年1-7月支付金额并用直方图展示",
@@ -382,7 +380,7 @@ def _rebuild_graph(old: dict) -> dict:
         {
             "type": "question-classifier",
             "title": "意图识别",
-            "desc": "OA/制度、客户档案、只读取数、闲聊、职责外。",
+            "desc": "OA/制度、工程项目、只读取数、闲聊、职责外。",
             "query_variable_selector": ["sys", "query"],
             "model": _model(0.0, 64),
             "classes": [
@@ -392,9 +390,9 @@ def _rebuild_graph(old: dict) -> dict:
                     "label": "OA/制度",
                 },
                 {
-                    "id": "customer",
-                    "name": "customer：某家客户的接口人、合同、账期、回款风险、SLA 等档案问题",
-                    "label": "客户档案",
+                    "id": "project",
+                    "name": "project：内部工程名称、编号、负责人、状态、里程碑",
+                    "label": "工程项目",
                 },
                 {
                     "id": "sql",
@@ -414,7 +412,7 @@ def _rebuild_graph(old: dict) -> dict:
             ],
             "_targetBranches": [
                 {"id": "oa", "name": "OA/制度"},
-                {"id": "customer", "name": "客户档案"},
+                {"id": "project", "name": "工程项目"},
                 {"id": "sql", "name": "经营取数"},
                 {"id": "chitchat", "name": "闲聊"},
                 {"id": "oos", "name": "职责外"},
@@ -430,11 +428,11 @@ def _rebuild_graph(old: dict) -> dict:
     )
 
     kr_oa = _kr_node("kr_oa", "检索OA/制度", [DS_OA, DS_POLICY], 620.0, 40.0)
-    kr_cust = _kr_node("kr_customer", "检索客户档案", [DS_CUSTOMER], 620.0, 280.0)
+    kr_cust = _kr_node("kr_project", "检索工程项目", [DS_PROJECT], 620.0, 280.0)
     if_oa = _if_empty("if_oa", "OA是否命中", "kr_oa", 920.0, 40.0)
-    if_cust = _if_empty("if_customer", "客户是否命中", "kr_customer", 920.0, 280.0)
+    if_cust = _if_empty("if_project", "工程是否命中", "kr_project", 920.0, 280.0)
     llm_oa = _llm_node("llm_oa", "按条款作答", PROMPT_OA, "kr_oa", 1220.0, 80.0)
-    llm_cust = _llm_node("llm_customer", "按档案作答", PROMPT_CUSTOMER, "kr_customer", 1220.0, 320.0)
+    llm_cust = _llm_node("llm_project", "按工程作答", PROMPT_PROJECT, "kr_project", 1220.0, 320.0)
     llm_sql_plan = _llm_node(
         "llm_sql_plan", "生成只读SQL", PROMPT_SQL_PLAN, None, 620.0, 520.0, max_tokens=400, temperature=0.0
     )
@@ -443,8 +441,8 @@ def _rebuild_graph(old: dict) -> dict:
     llm_chat = _llm_node("llm_chat", "能力说明", PROMPT_CHAT, None, 620.0, 760.0, max_tokens=512)
     ans_oa = _answer_node("answer_oa", "llm_oa", 1520.0, 80.0)
     ans_oa_miss = _answer_text("answer_oa_miss", MSG_OA_MISS, 1220.0, -60.0, "OA未命中")
-    ans_cust = _answer_node("answer_customer", "llm_customer", 1520.0, 320.0)
-    ans_cust_miss = _answer_text("answer_customer_miss", MSG_CUSTOMER_MISS, 1220.0, 180.0, "档案未命中")
+    ans_cust = _answer_node("answer_project", "llm_project", 1520.0, 320.0)
+    ans_cust_miss = _answer_text("answer_project_miss", MSG_PROJECT_MISS, 1220.0, 180.0, "工程未命中")
     ans_sql = _answer_text("answer_sql", "{{#http_sql.body#}}", 1520.0, 460.0, "取数正文")
     ans_sql_fail = _answer_text("answer_sql_fail", MSG_SQL_FAIL, 1520.0, 620.0, "取数失败")
     ans_chat = _answer_node("answer_chat", "llm_chat", 920.0, 760.0)
@@ -476,18 +474,18 @@ def _rebuild_graph(old: dict) -> dict:
     edges = [
         _edge(START_ID, "intent", "start", "question-classifier"),
         _edge("intent", "kr_oa", "question-classifier", "knowledge-retrieval", "oa"),
-        _edge("intent", "kr_customer", "question-classifier", "knowledge-retrieval", "customer"),
+        _edge("intent", "kr_project", "question-classifier", "knowledge-retrieval", "project"),
         _edge("intent", "llm_sql_plan", "question-classifier", "llm", "sql"),
         _edge("intent", "llm_chat", "question-classifier", "llm", "chitchat"),
         _edge("intent", "answer_oos", "question-classifier", "answer", "oos"),
         _edge("kr_oa", "if_oa", "knowledge-retrieval", "if-else"),
-        _edge("kr_customer", "if_customer", "knowledge-retrieval", "if-else"),
+        _edge("kr_project", "if_project", "knowledge-retrieval", "if-else"),
         _edge("if_oa", "answer_oa_miss", "if-else", "answer", "true"),
         _edge("if_oa", "llm_oa", "if-else", "llm", "false"),
-        _edge("if_customer", "answer_customer_miss", "if-else", "answer", "true"),
-        _edge("if_customer", "llm_customer", "if-else", "llm", "false"),
+        _edge("if_project", "answer_project_miss", "if-else", "answer", "true"),
+        _edge("if_project", "llm_project", "if-else", "llm", "false"),
         _edge("llm_oa", "answer_oa", "llm", "answer"),
-        _edge("llm_customer", "answer_customer", "llm", "answer"),
+        _edge("llm_project", "answer_project", "llm", "answer"),
         _edge("llm_sql_plan", "http_sql", "llm", "http-request"),
         _edge("http_sql", "if_sql", "http-request", "if-else"),
         _edge("if_sql", "answer_sql", "if-else", "answer", "true"),

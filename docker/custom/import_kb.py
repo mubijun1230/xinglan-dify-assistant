@@ -1,4 +1,4 @@
-"""Import Xinglan test markdown into Dify knowledge bases.
+"""Import markdown into Dify knowledge bases."""
 
 Run inside the api container:
   python /tmp/import_kb.py
@@ -26,20 +26,20 @@ ROOT = Path(os.environ.get("KB_IMPORT_ROOT", "/tmp/knowledge-bases"))
 
 DATASETS = [
     {
-        "name": "星澜-OA内部流程",
-        "description": "星澜智造 OA 审批、考勤、报销、合同等内部流程（测试语料）",
+        "name": "南极-OA内部流程",
+        "description": "南极人 OA、考勤、报销、合同等内部流程",
         "folder": "01-OA内部流程",
         "max_tokens": 700,
     },
     {
-        "name": "星澜-公司客户资料",
-        "description": "星澜智造客户主数据、KA 档案与回款资料（测试语料）",
-        "folder": "02-公司客户资料",
+        "name": "南极-工程项目",
+        "description": "南极人内部工程名称、负责人与状态",
+        "folder": "02-工程项目",
         "max_tokens": 600,
     },
     {
-        "name": "星澜-公司规章制度",
-        "description": "星澜智造员工手册、信息安全、财务纪律等制度（测试语料）",
+        "name": "南极-公司规章制度",
+        "description": "南极人员工手册、信息安全、财务纪律等制度",
         "folder": "03-公司规章制度",
         "max_tokens": 500,
     },
