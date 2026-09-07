@@ -1,0 +1,15 @@
+services:
+  dingtalk-bridge:
+    build: .
+    container_name: dify-dingtalk-bridge
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - default
+      - dify
+
+networks:
+  dify:
+    external: true
+    name: docker_default

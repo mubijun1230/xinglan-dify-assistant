@@ -1,0 +1,24 @@
+{
+  "database": "njds_data",
+  "table": "nanjiren_cate_date",
+  "row_count": 258923,
+  "columns": [
+    {"name": "id", "type": "int(11)", "comment": "自增主键"},
+    {"name": "year", "type": "int(4)", "comment": "年份"},
+    {"name": "month", "type": "int(2)", "comment": "月份"},
+    {"name": "day", "type": "int(2)", "comment": "日期"},
+    {"name": "sta_date", "type": "date", "comment": "统计完整日期(yyyy-mm-dd)"},
+    {"name": "cate", "type": "varchar(100)", "comment": "类目"},
+    {"name": "internal_cate", "type": "varchar(100)", "comment": "内部类目"},
+    {"name": "channel", "type": "varchar(50)", "comment": "渠道"},
+    {"name": "master", "type": "varchar(50)", "comment": "实控人"},
+    {"name": "manager", "type": "varchar(50)", "comment": "负责人"},
+    {"name": "store_id", "type": "varchar(50)", "comment": "店铺ID"},
+    {"name": "store_name", "type": "varchar(100)", "comment": "店铺名称"},
+    {"name": "judg", "type": "varchar(255)", "comment": "判断/备注字段"},
+    {"name": "type", "type": "varchar(100)", "comment": "类型分类"},
+    {"name": "oa_apply_type", "type": "varchar(10)", "comment": "新老店"},
+    {"name": "pay_amount", "type": "decimal(18,2)", "comment": "支付金额"},
+    {"name": "create_time", "type": "timestamp", "comment": "数据入库时间"}
+  ]
+}

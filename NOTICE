@@ -1,0 +1,9 @@
+This repository contains original work (DingTalk bridge, query gateway, Chatflow
+definitions, knowledge-base corpus, and Dify runtime patches) licensed under MIT.
+
+The files under `docker/` that come from the official Dify Docker deployment
+(compose, nginx, SSRF proxy) are from https://github.com/langgenius/dify
+and remain under the Apache License 2.0. Dify itself is not re-licensed by this
+project; pull official images from Docker Hub / GitHub Container Registry.
+
+Do not publish `.env` files, API keys, database passwords, or `docker/volumes`.

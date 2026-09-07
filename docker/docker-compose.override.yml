@@ -1,0 +1,32 @@
+services:
+  api:
+    volumes:
+      - ./custom/error_i18n.py:/app/api/core/error_i18n.py:ro
+      - ./custom/patches/based_generate_task_pipeline.py:/app/api/core/app/task_pipeline/based_generate_task_pipeline.py:ro
+      - ./custom/patches/base_app_generate_response_converter.py:/app/api/core/app/apps/base_app_generate_response_converter.py:ro
+      - ./custom/patches/base_node_data.py:/app/api/.venv/lib/python3.12/site-packages/graphon/entities/base_node_data.py:ro
+      - ./custom/import_kb.py:/tmp/import_kb.py:ro
+      - ./custom/patch_workflow.py:/tmp/patch_workflow.py:ro
+      - ../knowledge-bases:/tmp/knowledge-bases:ro
+      - ../query-gateway:/tmp/query-gateway:ro
+  worker:
+    volumes:
+      - ./custom/error_i18n.py:/app/api/core/error_i18n.py:ro
+      - ./custom/patches/based_generate_task_pipeline.py:/app/api/core/app/task_pipeline/based_generate_task_pipeline.py:ro
+      - ./custom/patches/base_app_generate_response_converter.py:/app/api/core/app/apps/base_app_generate_response_converter.py:ro
+      - ./custom/patches/base_node_data.py:/app/api/.venv/lib/python3.12/site-packages/graphon/entities/base_node_data.py:ro
+
+  query-gateway:
+    build: ../query-gateway
+    image: dify-query-gateway:local
+    container_name: dify-query-gateway
+    restart: unless-stopped
+    env_file:
+      - ../query-gateway/.env
+    ports:
+      - "8787:8787"
+    volumes:
+      - ../query-gateway/fonts:/app/fonts:ro
+    networks:
+      - default
+      - ssrf_proxy_network
