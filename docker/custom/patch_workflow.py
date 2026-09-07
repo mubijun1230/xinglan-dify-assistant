@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -22,7 +23,24 @@ DS_POLICY = "60060625-6909-4d73-9e25-571106a5b113"
 
 PROVIDER = "langgenius/siliconflow/siliconflow"
 MODEL_NAME = "deepseek-ai/DeepSeek-V4-Flash"
-QUERY_API_TOKEN = os.environ.get("QUERY_API_TOKEN", "CHANGE_ME_QUERY_TOKEN")
+
+
+def _load_query_api_token() -> str:
+    token = os.environ.get("QUERY_API_TOKEN", "").strip()
+    env_path = Path("/tmp/query-gateway/.env")
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            if key.strip() == "QUERY_API_TOKEN":
+                token = value.strip().strip('"').strip("'")
+                break
+    return token or "CHANGE_ME_QUERY_TOKEN"
+
+
+QUERY_API_TOKEN = _load_query_api_token()
 
 # 回复口径（空检索 / 职责外 / 网关失败）：不经二次模型改写，避免编造。
 MSG_OA_MISS = (
@@ -92,6 +110,8 @@ PROMPT_SQL_PLAN = """你是南极人类目日销 SQL 生成器。业务日 2026-
 - 今年 = year=2026；去年 = year=2025。时间过滤只用 year / month / day / sta_date。
 - 按渠道汇总：SELECT channel, ROUND(SUM(pay_amount),2) AS pay_amount FROM nanjiren_cate_date WHERE year=2026 GROUP BY channel ORDER BY pay_amount DESC LIMIT 50
 - 今年1-7月按月：SELECT month, ROUND(SUM(pay_amount),2) AS pay_amount FROM nanjiren_cate_date WHERE year=2026 AND month BETWEEN 1 AND 7 GROUP BY month ORDER BY month LIMIT 50
+- 按月+渠道+类目必须选出 month：SELECT month, ROUND(SUM(pay_amount),2) AS pay_amount FROM nanjiren_cate_date WHERE year=2025 AND channel='抖音' AND cate='内衣' GROUP BY month ORDER BY month LIMIT 50
+- 问「按月」时 SELECT 列表必须包含 month，禁止只 SELECT SUM(pay_amount)
 - 金额用 SUM(pay_amount)；必须有 LIMIT（聚合最多 50，明细最多 100）
 - 不要输出图表代码，图表由取数网关生成
 """

@@ -78,11 +78,29 @@ def _json_default(value: Any) -> Any:
     return str(value)
 
 
+def _query_token() -> str:
+    raw = os.environ.get("QUERY_API_TOKEN") or TOKEN or ""
+    return raw.strip().strip('"').strip("'")
+
+
+def _token_matches(got: str, expected: str) -> bool:
+    if not got or not expected or len(got) != len(expected):
+        return False
+    return secrets.compare_digest(got, expected)
+
+
 def require_token() -> None:
-    header = request.headers.get("Authorization") or ""
-    expected = f"Bearer {TOKEN}"
-    if not TOKEN or header != expected:
+    token = _query_token()
+    if not token:
         raise PermissionError("unauthorized")
+    header = (request.headers.get("Authorization") or "").strip()
+    alt = (request.headers.get("X-Query-Token") or "").strip()
+    provided = header[7:].strip() if header.lower().startswith("bearer ") else header
+    if provided.lower().startswith("bearer "):
+        provided = provided[7:].strip()
+    if _token_matches(provided, token) or _token_matches(alt, token):
+        return
+    raise PermissionError("unauthorized")
 
 
 def extract_plan(raw: str) -> dict[str, Any]:
@@ -106,31 +124,87 @@ def extract_plan(raw: str) -> dict[str, Any]:
     raise SqlGuardError("无法从模型输出中解析 SQL")
 
 
-def fallback_sql(question: str) -> str | None:
+KNOWN_CHANNELS = ("拼多多", "天猫", "抖音", "京东", "唯品会", "视频号", "快手", "其他", "云集")
+KNOWN_CATES = ("内衣", "服饰配件", "服配", "男装", "女装", "鞋品", "童装", "鞋配")
+COL_ZH = {
+    "month": "月份",
+    "year": "年份",
+    "channel": "渠道",
+    "cate": "类目",
+    "internal_cate": "内部类目",
+    "pay_amount": "支付金额",
+    "amt": "支付金额",
+    "amount": "支付金额",
+}
+
+
+def question_year(question: str) -> int:
     q = question or ""
-    year = 2026
     if re.search(r"2025|去年", q):
-        year = 2025
-    elif re.search(r"2024", q):
-        year = 2024
+        return 2025
+    if re.search(r"2024", q):
+        return 2024
+    return 2026
+
+
+def wants_by_month(question: str) -> bool:
+    q = question or ""
+    return bool(re.search(r"按月|每月|各月|分月|逐月", q))
+
+
+def question_where(question: str) -> str:
+    q = question or ""
+    cond = [f"year={question_year(q)}"]
     month_span = re.search(r"(\d{1,2})\s*[-~—至到]\s*(\d{1,2})\s*月", q)
     if re.search(r"1\s*[-~—至到]?\s*7\s*月|前7个?月", q) or (
         month_span and month_span.group(1) == "1" and month_span.group(2) == "7"
     ):
+        cond.append("month BETWEEN 1 AND 7")
+    for channel in KNOWN_CHANNELS:
+        if channel in q:
+            cond.append(f"channel='{channel}'")
+            break
+    for cate in sorted(KNOWN_CATES, key=len, reverse=True):
+        if cate in q:
+            cond.append(f"(cate='{cate}' OR internal_cate='{cate}')")
+            break
+    return " AND ".join(cond)
+
+
+def canonical_agg_sql(question: str) -> str:
+    where = question_where(question)
+    if wants_by_month(question) or re.search(r"1\s*[-~—至到]?\s*7\s*月|前7个?月", question or ""):
         return (
             "SELECT month, ROUND(SUM(pay_amount), 2) AS pay_amount "
-            f"FROM nanjiren_cate_date WHERE year={year} AND month BETWEEN 1 AND 7 "
+            f"FROM nanjiren_cate_date WHERE {where} "
             "GROUP BY month ORDER BY month LIMIT 50"
         )
+    if re.search(r"渠道", question or "") and not any(ch in (question or "") for ch in KNOWN_CHANNELS):
+        return (
+            "SELECT channel, ROUND(SUM(pay_amount), 2) AS pay_amount "
+            f"FROM nanjiren_cate_date WHERE {where} "
+            "GROUP BY channel ORDER BY pay_amount DESC LIMIT 50"
+        )
+    return (
+        "SELECT ROUND(SUM(pay_amount), 2) AS pay_amount "
+        f"FROM nanjiren_cate_date WHERE {where} LIMIT 50"
+    )
+
+
+def select_has_month(sql: str) -> bool:
+    head = re.split(r"\bfrom\b", sql or "", maxsplit=1, flags=re.I)[0]
+    return bool(re.search(r"\bmonth\b", head, re.I))
+
+
+def fallback_sql(question: str) -> str | None:
+    q = question or ""
+    if wants_by_month(q) or re.search(r"1\s*[-~—至到]?\s*7\s*月|前7个?月", q):
+        return canonical_agg_sql(q)
     if not re.search(r"渠道", q):
         return None
     if not re.search(r"支付|金额|销售|汇总|合计", q):
         return None
-    return (
-        "SELECT channel, ROUND(SUM(pay_amount), 2) AS pay_amount "
-        f"FROM nanjiren_cate_date WHERE year={year} "
-        "GROUP BY channel ORDER BY pay_amount DESC LIMIT 50"
-    )
+    return canonical_agg_sql(q)
 
 
 def request_payload() -> tuple[str, str]:
@@ -165,14 +239,21 @@ def fmt_wan(value: Any) -> str:
     return f"{float(value or 0) / 10000:.1f}万元"
 
 
-def format_row_label(columns: list[str], row: dict[str, Any], label_col: str) -> str:
-    value = row.get(label_col)
-    if label_col == "month" or (label_col == columns[0] and "month" in columns):
+def format_cell(col: str, value: Any, amount_col: str | None) -> str:
+    if col == "month":
         try:
             return f"{int(value)}月"
         except (TypeError, ValueError):
-            pass
-    return str(value)
+            return str(value or "")
+    if amount_col and col == amount_col:
+        return fmt_wan(value)
+    if value is None:
+        return ""
+    return str(_json_default(value))
+
+
+def format_row_label(columns: list[str], row: dict[str, Any], label_col: str) -> str:
+    return format_cell(label_col, row.get(label_col), None)
 
 
 def build_bar_png(columns: list[str], rows: list[dict[str, Any]], title: str) -> bytes | None:
@@ -287,36 +368,34 @@ def build_reply(
     as_of = data_as_of(sql)
     as_of_s = f"{as_of.year}年{as_of.month:02d}月{as_of.day:02d}日"
     amount_col = pick_amount_col(columns)
-    if "channel" in columns and amount_col:
-        parts = []
-        for row in rows:
-            amt = float(row.get(amount_col) or 0)
-            if amt <= 0:
-                continue
-            parts.append(f"{format_row_label(columns, row, 'channel')}-{fmt_wan(amt)}")
-        if not parts:
-            text = f"截至{as_of_s}，没有符合条件的渠道支付金额。"
-        else:
-            lines = "、\n".join(parts)
-            text = f"截至{as_of_s}，渠道支付金额汇总如下：\n{lines}。"
-    elif amount_col and len(rows) == 1:
+    if not rows:
+        text = f"截至{as_of_s}，没有符合条件的数据。"
+    elif amount_col and len(rows) == 1 and len(columns) == 1:
         text = f"截至{as_of_s}，支付金额合计 {fmt_wan(rows[0].get(amount_col))}。"
-    elif amount_col and columns:
-        label_col = next((c for c in columns if c != amount_col), columns[0])
-        parts = []
-        for row in rows[:20]:
-            amt = float(row.get(amount_col) or 0)
-            if amt <= 0:
-                continue
-            parts.append(f"{format_row_label(columns, row, label_col)}-{fmt_wan(amt)}")
-        if not parts:
-            text = f"截至{as_of_s}，无数据。"
-        elif label_col == "month":
-            text = f"截至{as_of_s}，销售额汇总如下：\n{'、\n'.join(parts)}。"
-        else:
-            text = f"截至{as_of_s}，汇总如下：\n{'、\n'.join(parts)}。"
     else:
-        text = f"截至{as_of_s}，查到 {len(rows)} 行。"
+        label_cols = [c for c in columns if c != amount_col] if amount_col else list(columns)
+        items: list[str] = []
+        total = 0.0
+        for row in rows[:50]:
+            if amount_col:
+                amt = float(row.get(amount_col) or 0)
+                if amt <= 0:
+                    continue
+                total += amt
+                labels = [format_cell(c, row.get(c), amount_col) for c in label_cols]
+                label = " / ".join(part for part in labels if part) or "合计"
+                items.append(f"- {label}：{fmt_wan(amt)}")
+            else:
+                labels = [f"{COL_ZH.get(c, c)}={format_cell(c, row.get(c), None)}" for c in columns]
+                items.append("- " + "，".join(labels))
+        if not items:
+            text = f"截至{as_of_s}，没有符合条件的数据。"
+        else:
+            head = f"截至{as_of_s}，汇总如下："
+            # Markdown list keeps each month on its own line in Dify/DingTalk.
+            text = "\n".join([head, *items])
+            if amount_col and len(items) > 1:
+                text += f"\n- 合计：{fmt_wan(total)}"
     if want == "excel":
         text += f"\n[{filename}]"
     return text
@@ -470,6 +549,13 @@ def query():
             columns=set(COLUMNS) or {"id"},
             max_rows=MAX_ROWS,
         )
+        if wants_by_month(question) and not select_has_month(sql):
+            sql = sanitize_select(
+                canonical_agg_sql(question),
+                table=TABLE,
+                columns=set(COLUMNS) or {"id"},
+                max_rows=MAX_ROWS,
+            )
         columns, rows = run_sql(sql)
         want = detect_want(question, plan)
         filename = excel_filename(question, want)

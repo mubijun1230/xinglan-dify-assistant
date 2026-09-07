@@ -5,6 +5,7 @@ services:
       - ./custom/patches/based_generate_task_pipeline.py:/app/api/core/app/task_pipeline/based_generate_task_pipeline.py:ro
       - ./custom/patches/base_app_generate_response_converter.py:/app/api/core/app/apps/base_app_generate_response_converter.py:ro
       - ./custom/patches/base_node_data.py:/app/api/.venv/lib/python3.12/site-packages/graphon/entities/base_node_data.py:ro
+      - ./custom/patches/ssrf_proxy.py:/app/api/core/helper/ssrf_proxy.py:ro
       - ./custom/import_kb.py:/tmp/import_kb.py:ro
       - ./custom/patch_workflow.py:/tmp/patch_workflow.py:ro
       - ../knowledge-bases:/tmp/knowledge-bases:ro
@@ -15,6 +16,7 @@ services:
       - ./custom/patches/based_generate_task_pipeline.py:/app/api/core/app/task_pipeline/based_generate_task_pipeline.py:ro
       - ./custom/patches/base_app_generate_response_converter.py:/app/api/core/app/apps/base_app_generate_response_converter.py:ro
       - ./custom/patches/base_node_data.py:/app/api/.venv/lib/python3.12/site-packages/graphon/entities/base_node_data.py:ro
+      - ./custom/patches/ssrf_proxy.py:/app/api/core/helper/ssrf_proxy.py:ro
 
   query-gateway:
     build: ../query-gateway
@@ -26,6 +28,8 @@ services:
     ports:
       - "8787:8787"
     volumes:
+      - ../query-gateway/app.py:/app/app.py:ro
+      - ../query-gateway/sql_guard.py:/app/sql_guard.py:ro
       - ../query-gateway/fonts:/app/fonts:ro
     networks:
       - default
